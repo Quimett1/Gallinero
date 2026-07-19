@@ -42,12 +42,15 @@ const CloudExcel = (() => {
     return response.status === 204 ? null : response.json();
   }
   async function workbook() {
-    if (!fileId) {
-      const files = await call('/me/drive/root/children?$select=id,name');
-      const found = files.value?.find(file => file.name?.toLowerCase() === 'gallines.xlsx');
-      if (!found) throw new Error('No se encontró GALLINES.xlsx en la carpeta principal de OneDrive.');
-      fileId = found.id; localStorage.setItem('gallines-onedrive-file-id', fileId);
-    }
+    // Al reemplazar un Excel, OneDrive puede asignarle un identificador nuevo.
+    // Buscamos siempre el archivo actual en vez de reutilizar uno guardado.
+    const files = await call('/me/drive/root/children?$select=id,name,lastModifiedDateTime');
+    const found = files.value
+      ?.filter(file => file.name?.toLowerCase() === 'gallines.xlsx')
+      .sort((a, b) => String(b.lastModifiedDateTime || '').localeCompare(String(a.lastModifiedDateTime || '')))[0];
+    if (!found) throw new Error('No se encontró GALLINES.xlsx en la carpeta principal de OneDrive.');
+    fileId = found.id;
+    localStorage.setItem('gallines-onedrive-file-id', fileId);
     const sheets = await call(`/me/drive/items/${fileId}/workbook/worksheets`); return { sheets: Object.fromEntries(sheets.value.map(sheet => [sheet.name, sheet.id])) };
   }
   async function values(sheetName) { const { sheets } = await workbook(); const range = await call(`/me/drive/items/${fileId}/workbook/worksheets/${sheets[sheetName]}/usedRange(valuesOnly=true)`); return range.values || []; }
