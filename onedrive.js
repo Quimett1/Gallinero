@@ -36,13 +36,14 @@ const CloudExcel = (() => {
     const sheets = await call(`/me/drive/items/${fileId}/workbook/worksheets`); return { sheets: Object.fromEntries(sheets.value.map(sheet => [sheet.name, sheet.id])) };
   }
   async function values(sheetName) { const { sheets } = await workbook(); const range = await call(`/me/drive/items/${fileId}/workbook/worksheets/${sheets[sheetName]}/usedRange(valuesOnly=true)`); return range.values || []; }
+  async function rangeValues(sheetName, address) { const { sheets } = await workbook(); const range = await call(`/me/drive/items/${fileId}/workbook/worksheets/${sheets[sheetName]}/range(address='${address}')`); return range.values || []; }
   async function load() {
-    const [eggsRaw, salesRaw, expensesRaw, dailyRaw] = await Promise.all([values('POSTA_DIÀRIA_MIDES'), values('VENTES'), values('DESPESES'), values('PRODUCCIÓ_DIÀRIA')]);
+    const [eggsRaw, salesRaw, expensesRaw, dailyRaw] = await Promise.all([rangeValues('POSTA_DIÀRIA_MIDES', 'B2:D5000'), values('VENTES'), values('DESPESES'), rangeValues('PRODUCCIÓ_DIÀRIA', 'A2:B1000')]);
     return {
-      eggs: eggsRaw.slice(1).filter(row => row[1]).map(row => ({ date: excelDate(row[1]), weight: row[2], size: row[3] || classifyWeight(row[2]) })),
+      eggs: eggsRaw.filter(row => row[0]).map(row => ({ date: excelDate(row[0]), weight: row[1], size: row[2] || classifyWeight(row[1]) })),
       sales: salesRaw.slice(1).filter(row => row[0]).map(row => ({ date: excelDate(row[0]), client: row[1], type: row[2], dozens: row[3], total: row[5] ?? Number(row[3] || 0) * Number(row[4] || 0) })),
       expenses: expensesRaw.slice(1).filter(row => row[0]).map(row => ({ date: excelDate(row[0]), feed: row[1], bedding: row[2], straw: row[3], other: row[4], concept: row[5], total: row[9] ?? 0 })),
-      daily: dailyRaw.slice(1).filter(row => row[0]).map(row => ({ date: excelDate(row[0]), total: Number(row[1] || 0) }))
+      daily: dailyRaw.filter(row => row[0]).map(row => ({ date: excelDate(row[0]), total: Number(row[1] || 0) }))
     };
   }
   const classifyWeight = weight => Number(weight) < 53 ? 'S' : Number(weight) < 63 ? 'M' : Number(weight) < 73 ? 'L' : 'XL';
