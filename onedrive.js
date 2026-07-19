@@ -27,7 +27,12 @@ const CloudExcel = (() => {
     return response.status === 204 ? null : response.json();
   }
   async function workbook() {
-    if (!fileId) { const found = await call("/me/drive/root/search(q='GALLINES.xlsx')?$select=id,name"); if (!found.value?.length) throw new Error('No se encontró GALLINES.xlsx en OneDrive.'); fileId = found.value[0].id; localStorage.setItem('gallines-onedrive-file-id', fileId); }
+    if (!fileId) {
+      const files = await call('/me/drive/root/children?$select=id,name');
+      const found = files.value?.find(file => file.name?.toLowerCase() === 'gallines.xlsx');
+      if (!found) throw new Error('No se encontró GALLINES.xlsx en la carpeta principal de OneDrive.');
+      fileId = found.id; localStorage.setItem('gallines-onedrive-file-id', fileId);
+    }
     const sheets = await call(`/me/drive/items/${fileId}/workbook/worksheets`); return { sheets: Object.fromEntries(sheets.value.map(sheet => [sheet.name, sheet.id])) };
   }
   async function values(sheetName) { const { sheets } = await workbook(); const range = await call(`/me/drive/items/${fileId}/workbook/worksheets/${sheets[sheetName]}/usedRange(valuesOnly=true)`); return range.values || []; }
