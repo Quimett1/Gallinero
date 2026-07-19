@@ -22,8 +22,8 @@ function classify(weight) { return weight < 53 ? 'S' : weight < 63 ? 'M' : weigh
 function weightsFromInput() {
   return $('eggWeights').value.split(/[\s,;]+/).filter(Boolean).map(Number).filter(value => Number.isFinite(value) && value > 0);
 }
-function renderRows(id, rows, render, empty, limit = 12) {
-  $(id).innerHTML = rows.slice().reverse().slice(0, limit).map(render).join('') || `<tr><td colspan="8">${empty}</td></tr>`;
+function renderRows(id, rows, render, empty) {
+  $(id).innerHTML = rows.slice().reverse().map(render).join('') || `<tr><td colspan="8">${empty}</td></tr>`;
 }
 function render() {
   const todayEggs = data.eggs.filter(row => row.date === today).length;
