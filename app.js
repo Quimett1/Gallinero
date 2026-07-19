@@ -109,7 +109,9 @@ document.querySelectorAll('[data-view]').forEach(node => node.addEventListener('
 $('signIn').addEventListener('click', async () => {
   try {
     $('signIn').disabled = true; $('signIn').textContent = 'Conectando…';
-    await CloudExcel.signIn(); cloudConnected = true;
+    const connected = await CloudExcel.signIn();
+    if (!connected) return;
+    cloudConnected = true;
     $('signIn').textContent = 'OneDrive conectado'; $('signIn').classList.add('connected');
     await load();
   } catch (error) { toast(error.message || 'No se pudo iniciar sesión con OneDrive.', true); $('signIn').textContent = 'Conectar OneDrive'; }
@@ -126,4 +128,7 @@ $('saleForm').addEventListener('submit', async event => { event.preventDefault()
 $('expenseForm').addEventListener('submit', async event => { event.preventDefault(); try { await request('/api/expense', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: $('expenseDate').value, feed: Number($('expenseFeed').value), bedding: Number($('expenseBedding').value), straw: Number($('expenseStraw').value), other: Number($('expenseOther').value), concept: $('expenseConcept').value.trim() }) }); event.target.reset(); $('expenseDate').value = today; ['expenseFeed', 'expenseBedding', 'expenseStraw', 'expenseOther'].forEach(id => $(id).value = 0); toast('Gasto guardado en DESPESES.'); await load(); } catch (error) { toast(error.message, true); } });
 $('orderForm').addEventListener('submit', event => { event.preventDefault(); const dozens = Number($('orderDozens').value); const price = Number($('orderPrice').value); orders.push({ id: `${Date.now()}-${Math.random()}`, date: $('orderDate').value, client: $('orderClient').value.trim(), dozens, price, total: dozens * price, notes: $('orderNotes').value.trim() }); saveOrders(); event.target.reset(); $('orderDate').value = today; $('orderPrice').value = 4; renderCalendar(); renderOrders(); toast('Comanda añadida al calendario.'); });
 $('ordersTable').addEventListener('click', event => { const button = event.target.closest('[data-action]'); if (!button) return; const order = orders.find(item => item.id === button.dataset.id); if (!order) return; if (button.dataset.action === 'delete') { orders = orders.filter(item => item.id !== order.id); saveOrders(); renderOrders(); renderCalendar(); return; } $('saleDate').value = order.date; $('saleClient').value = order.client; $('saleDozens').value = order.dozens; orders = orders.filter(item => item.id !== order.id); saveOrders(); renderOrders(); renderCalendar(); switchView('sales'); toast('Comanda preparada para registrar como venta.'); });
-load();
+(async () => {
+  if (await CloudExcel.initialize()) cloudConnected = true;
+  await load();
+})();
