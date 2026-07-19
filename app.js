@@ -12,6 +12,7 @@ const euro = value => new Intl.NumberFormat('es-ES', { style: 'currency', curren
 const date = value => value ? new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(new Date(`${value}T12:00:00`)) : '—';
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
 const sameMonth = value => value?.slice(0, 7) === today.slice(0, 7);
+const eggCountFor = dateKey => data.eggs.filter(row => row.date === dateKey).length || Number(data.daily.find(row => row.date === dateKey)?.total || 0);
 const saveOrders = () => localStorage.setItem('gallines-orders-v1', JSON.stringify(orders));
 
 function toast(message, error = false) {
@@ -26,7 +27,7 @@ function renderRows(id, rows, render, empty) {
   $(id).innerHTML = rows.slice().reverse().map(render).join('') || `<tr><td colspan="8">${empty}</td></tr>`;
 }
 function render() {
-  const todayEggs = data.eggs.filter(row => row.date === today).length;
+  const todayEggs = eggCountFor(today);
   const sales = data.sales.filter(row => sameMonth(row.date));
   const expenses = data.expenses.filter(row => sameMonth(row.date));
   const income = sales.reduce((sum, row) => sum + Number(row.total || 0), 0);
@@ -55,16 +56,16 @@ function renderCalendar() {
   const cells = Array.from({ length: start }, () => '<div class="calendar-day empty"></div>');
   for (let day = 1; day <= days; day++) {
     const key = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    const eggs = data.eggs.filter(row => row.date === key).length; const sales = data.sales.filter(row => row.date === key); const dayOrders = orders.filter(row => row.date === key);
+    const eggs = eggCountFor(key); const sales = data.sales.filter(row => row.date === key); const dayOrders = orders.filter(row => row.date === key);
     const marks = `${eggs ? '<i class="mark egg"></i>' : ''}${sales.length ? '<i class="mark sale"></i>' : ''}${dayOrders.length ? '<i class="mark order"></i>' : ''}`;
     cells.push(`<button class="calendar-day ${key === today ? 'today' : ''} ${key === selectedDate ? 'selected' : ''}" data-date="${key}"><span class="day-number">${day}</span>${eggs ? `<span class="day-total">${eggs} 🥚</span>` : ''}<span class="calendar-marks">${marks}</span></button>`);
   }
   $('calendarGrid').innerHTML = cells.join(''); renderDayPanel();
 }
 function renderDayPanel() {
-  const eggs = data.eggs.filter(row => row.date === selectedDate); const sales = data.sales.filter(row => row.date === selectedDate); const dayOrders = orders.filter(row => row.date === selectedDate);
+  const eggs = data.eggs.filter(row => row.date === selectedDate); const eggTotal = eggCountFor(selectedDate); const sales = data.sales.filter(row => row.date === selectedDate); const dayOrders = orders.filter(row => row.date === selectedDate);
   const sizes = ['S', 'M', 'L', 'XL']; const income = sales.reduce((sum, row) => sum + Number(row.total || 0), 0); const dozens = sales.reduce((sum, row) => sum + Number(row.dozens || 0), 0);
-  $('dayPanel').innerHTML = `<p class="section-label">${selectedDate === today ? 'HOY' : 'DETALLE DIARIO'}</p><h2>${date(selectedDate)}</h2><div class="daily-kpis"><div><span>Huevos</span><b>${eggs.length}</b></div><div><span>Docenas vendidas</span><b>${dozens}</b></div><div><span>Facturado</span><b>${euro(income)}</b></div><div><span>Comandas</span><b>${dayOrders.length}</b></div></div><h3>Tallas de huevo</h3><div class="daily-sizes">${sizes.map(size => `<span>${size}: ${eggs.filter(row => row.size === size).length}</span>`).join('')}</div><h3>Ventas del día</h3><ul class="daily-list">${sales.length ? sales.map(row => `<li><b>${esc(row.client)}</b> · ${row.dozens} doc. · ${euro(row.total)}</li>`).join('') : '<li>No hay ventas registradas.</li>'}</ul><h3>Comandas</h3><ul class="daily-list">${dayOrders.length ? dayOrders.map(row => `<li><b>${esc(row.client)}</b> · ${row.dozens} doc. · ${euro(row.total)}</li>`).join('') : '<li>No hay comandas pendientes.</li>'}</ul><button class="primary" id="planSale" type="button">Preparar venta para este día</button>`;
+  $('dayPanel').innerHTML = `<p class="section-label">${selectedDate === today ? 'HOY' : 'DETALLE DIARIO'}</p><h2>${date(selectedDate)}</h2><div class="daily-kpis"><div><span>Huevos</span><b>${eggTotal}</b></div><div><span>Docenas vendidas</span><b>${dozens}</b></div><div><span>Facturado</span><b>${euro(income)}</b></div><div><span>Comandas</span><b>${dayOrders.length}</b></div></div><h3>Tallas de huevo</h3><div class="daily-sizes">${sizes.map(size => `<span>${size}: ${eggs.filter(row => row.size === size).length}</span>`).join('')}</div><h3>Ventas del día</h3><ul class="daily-list">${sales.length ? sales.map(row => `<li><b>${esc(row.client)}</b> · ${row.dozens} doc. · ${euro(row.total)}</li>`).join('') : '<li>No hay ventas registradas.</li>'}</ul><h3>Comandas</h3><ul class="daily-list">${dayOrders.length ? dayOrders.map(row => `<li><b>${esc(row.client)}</b> · ${row.dozens} doc. · ${euro(row.total)}</li>`).join('') : '<li>No hay comandas pendientes.</li>'}</ul><button class="primary" id="planSale" type="button">Preparar venta para este día</button>`;
 }
 function renderOrders() {
   const total = orders.reduce((sum, order) => sum + Number(order.total), 0); $('ordersTotal').textContent = euro(total); $('ordersCount').textContent = orders.length ? `${orders.length} comanda(s) pendiente(s) · ${orders.reduce((sum, order) => sum + Number(order.dozens), 0)} docenas` : 'No hay comandas pendientes.';
@@ -73,7 +74,7 @@ function renderOrders() {
 function drawCharts() {
   if (!window.Chart) return;
   const labels = []; const quantities = [];
-  for (let days = 13; days >= 0; days--) { const day = new Date(); day.setDate(day.getDate() - days); const key = day.toISOString().slice(0, 10); labels.push(day.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })); quantities.push(data.eggs.filter(row => row.date === key).length); }
+  for (let days = 13; days >= 0; days--) { const day = new Date(); day.setDate(day.getDate() - days); const key = day.toISOString().slice(0, 10); labels.push(day.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })); quantities.push(eggCountFor(key)); }
   productionChart?.destroy(); sizeChart?.destroy();
   productionChart = new Chart($('productionChart'), { type: 'bar', data: { labels, datasets: [{ data: quantities, backgroundColor: '#2a8757', borderRadius: 5 }] }, options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#e8eee8' } }, x: { grid: { display: false } } } } });
   const monthEggs = data.eggs.filter(row => sameMonth(row.date)); const sizes = ['S', 'M', 'L', 'XL'];
