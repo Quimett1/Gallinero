@@ -67,12 +67,23 @@ const CloudExcel = (() => {
     // hoja por un nombre normalizado en vez de depender de un carácter exacto.
     const normal = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
     const sheet = (...names) => Object.entries(sheets).find(([name]) => names.some(candidate => normal(name) === normal(candidate)))?.[1] || [];
-    const eggsRaw = sheet('POSTA_DIÀRIA_MIDES', 'POSTA_DIARIA_MIDES').slice(1);
+    const eggsSheet = sheet('POSTA_DIÀRIA_MIDES', 'POSTA_DIARIA_MIDES');
+    const eggHeaders = eggsSheet[0] || [];
+    const column = (headers, ...names) => headers.findIndex(value => names.some(name => normal(value) === normal(name)));
+    // SheetJS recorta la primera columna vacía de esta hoja (la A). Por ello
+    // se localizan las columnas por su encabezado, en lugar de usar B/C/D.
+    const eggDateColumn = column(eggHeaders, 'DATA', 'FECHA');
+    const eggWeightColumn = eggHeaders.findIndex(value => normal(value).startsWith('PES'));
+    const eggSizeColumn = column(eggHeaders, 'MIDA', 'TALLA');
+    const eggsRaw = eggsSheet.slice(1);
     const salesRaw = sheet('VENTES');
     const expensesRaw = sheet('DESPESES');
     const dailyRaw = sheet('PRODUCCIÓ_DIÀRIA', 'PRODUCCIO_DIARIA').slice(1);
     const eggs = eggsRaw
-      .map(row => ({ date: excelDate(row[1]), weight: Number(row[2] || 0), size: row[3] || classifyWeight(row[2]) }))
+      .map(row => {
+        const weight = Number(row[eggWeightColumn] || 0);
+        return { date: excelDate(row[eggDateColumn]), weight, size: row[eggSizeColumn] || classifyWeight(weight) };
+      })
       .filter(row => row.date && row.weight > 0);
     const daily = dailyRaw
       .map(row => ({ date: excelDate(row[0]), total: Number(row[1] || 0) }))
