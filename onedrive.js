@@ -5,7 +5,22 @@ const CloudExcel = (() => {
   const app = window.msal ? new msal.PublicClientApplication({ auth: { clientId, authority: 'https://login.microsoftonline.com/common', redirectUri: `${window.location.origin}/` }, cache: { cacheLocation: 'localStorage' } }) : null;
   let account = null; let fileId = localStorage.getItem('gallines-onedrive-file-id');
 
-  const excelDate = value => value ? new Date(Date.UTC(1899, 11, 30) + Number(value) * 86400000).toISOString().slice(0, 10) : null;
+  // Excel puede entregar las fechas como número, texto o fecha real según el
+  // lector usado por OneDrive. Normalizarlas aquí evita que se pierda la puesta.
+  const excelDate = value => {
+    if (value === null || value === undefined || value === '') return null;
+    if (value instanceof Date) return value.toISOString().slice(0, 10);
+    if (typeof value === 'string') {
+      const plain = value.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+      if (plain) return plain;
+      const parsed = new Date(value);
+      if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+    }
+    const serial = Number(value);
+    return Number.isFinite(serial) && serial > 0
+      ? new Date(Date.UTC(1899, 11, 30) + serial * 86400000).toISOString().slice(0, 10)
+      : null;
+  };
   const serialDate = value => Math.floor((Date.parse(`${value}T00:00:00Z`) - Date.UTC(1899, 11, 30)) / 86400000);
   async function restoreSession() {
     if (!app) return null;
@@ -48,15 +63,25 @@ const CloudExcel = (() => {
   }
   async function load() {
     const sheets = await downloadValues();
-    const eggsRaw = (sheets['POSTA_DIÀRIA_MIDES'] || []).slice(1);
-    const salesRaw = sheets['VENTES'] || [];
-    const expensesRaw = sheets['DESPESES'] || [];
-    const dailyRaw = (sheets['PRODUCCIÓ_DIÀRIA'] || []).slice(1);
+    // Algunos Excels conservan los acentos de forma distinta. Localizamos la
+    // hoja por un nombre normalizado en vez de depender de un carácter exacto.
+    const normal = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+    const sheet = (...names) => Object.entries(sheets).find(([name]) => names.some(candidate => normal(name) === normal(candidate)))?.[1] || [];
+    const eggsRaw = sheet('POSTA_DIÀRIA_MIDES', 'POSTA_DIARIA_MIDES').slice(1);
+    const salesRaw = sheet('VENTES');
+    const expensesRaw = sheet('DESPESES');
+    const dailyRaw = sheet('PRODUCCIÓ_DIÀRIA', 'PRODUCCIO_DIARIA').slice(1);
+    const eggs = eggsRaw
+      .map(row => ({ date: excelDate(row[1]), weight: Number(row[2] || 0), size: row[3] || classifyWeight(row[2]) }))
+      .filter(row => row.date && row.weight > 0);
+    const daily = dailyRaw
+      .map(row => ({ date: excelDate(row[0]), total: Number(row[1] || 0) }))
+      .filter(row => row.date && row.total > 0);
     return {
-      eggs: eggsRaw.filter(row => row[1]).map(row => ({ date: excelDate(row[1]), weight: row[2], size: row[3] || classifyWeight(row[2]) })),
+      eggs,
       sales: salesRaw.slice(1).filter(row => row[0]).map(row => ({ date: excelDate(row[0]), client: row[1], type: row[2], dozens: row[3], total: row[5] ?? Number(row[3] || 0) * Number(row[4] || 0) })),
       expenses: expensesRaw.slice(1).filter(row => row[0]).map(row => ({ date: excelDate(row[0]), feed: row[1], bedding: row[2], straw: row[3], other: row[4], concept: row[5], total: row[9] ?? 0 })),
-      daily: dailyRaw.filter(row => row[0]).map(row => ({ date: excelDate(row[0]), total: Number(row[1] || 0) }))
+      daily
     };
   }
   const classifyWeight = weight => Number(weight) < 53 ? 'S' : Number(weight) < 63 ? 'M' : Number(weight) < 73 ? 'L' : 'XL';
