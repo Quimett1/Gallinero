@@ -74,7 +74,8 @@ function renderOrders() {
 function drawCharts() {
   if (!window.Chart) return;
   const labels = []; const quantities = [];
-  for (let days = 13; days >= 0; days--) { const day = new Date(); day.setDate(day.getDate() - days); const key = day.toISOString().slice(0, 10); labels.push(day.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })); quantities.push(eggCountFor(key)); }
+  const now = new Date(); const year = now.getFullYear(); const month = now.getMonth(); const totalDays = now.getDate();
+  for (let dayNumber = 1; dayNumber <= totalDays; dayNumber++) { const day = new Date(year, month, dayNumber, 12); const key = day.toISOString().slice(0, 10); labels.push(day.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })); quantities.push(eggCountFor(key)); }
   productionChart?.destroy(); sizeChart?.destroy();
   productionChart = new Chart($('productionChart'), { type: 'bar', data: { labels, datasets: [{ data: quantities, backgroundColor: '#2a8757', borderRadius: 5 }] }, options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#e8eee8' } }, x: { grid: { display: false } } } } });
   const monthEggs = data.eggs.filter(row => sameMonth(row.date)); const sizes = ['S', 'M', 'L', 'XL'];
