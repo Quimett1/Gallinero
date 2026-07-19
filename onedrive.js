@@ -37,10 +37,23 @@ const CloudExcel = (() => {
   }
   async function values(sheetName) { const { sheets } = await workbook(); const range = await call(`/me/drive/items/${fileId}/workbook/worksheets/${sheets[sheetName]}/usedRange(valuesOnly=true)`); return range.values || []; }
   async function rangeValues(sheetName, address) { const { sheets } = await workbook(); const range = await call(`/me/drive/items/${fileId}/workbook/worksheets/${sheets[sheetName]}/range(address='${address}')`); return range.values || []; }
+  async function downloadValues() {
+    if (!window.XLSX) throw new Error('No se pudo cargar el lector del Excel.');
+    await workbook();
+    const accessToken = await token();
+    const response = await fetch(`${graph}/me/drive/items/${fileId}/content`, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!response.ok) throw new Error('No se pudo descargar GALLINES.xlsx desde OneDrive.');
+    const book = window.XLSX.read(await response.arrayBuffer(), { type: 'array', cellDates: false });
+    return Object.fromEntries(book.SheetNames.map(name => [name, window.XLSX.utils.sheet_to_json(book.Sheets[name], { header: 1, raw: true, defval: null })]));
+  }
   async function load() {
-    const [eggsRaw, salesRaw, expensesRaw, dailyRaw] = await Promise.all([rangeValues('POSTA_DIÀRIA_MIDES', 'B2:D5000'), values('VENTES'), values('DESPESES'), rangeValues('PRODUCCIÓ_DIÀRIA', 'A2:B1000')]);
+    const sheets = await downloadValues();
+    const eggsRaw = (sheets['POSTA_DIÀRIA_MIDES'] || []).slice(1);
+    const salesRaw = sheets['VENTES'] || [];
+    const expensesRaw = sheets['DESPESES'] || [];
+    const dailyRaw = (sheets['PRODUCCIÓ_DIÀRIA'] || []).slice(1);
     return {
-      eggs: eggsRaw.filter(row => row[0]).map(row => ({ date: excelDate(row[0]), weight: row[1], size: row[2] || classifyWeight(row[1]) })),
+      eggs: eggsRaw.filter(row => row[1]).map(row => ({ date: excelDate(row[1]), weight: row[2], size: row[3] || classifyWeight(row[2]) })),
       sales: salesRaw.slice(1).filter(row => row[0]).map(row => ({ date: excelDate(row[0]), client: row[1], type: row[2], dozens: row[3], total: row[5] ?? Number(row[3] || 0) * Number(row[4] || 0) })),
       expenses: expensesRaw.slice(1).filter(row => row[0]).map(row => ({ date: excelDate(row[0]), feed: row[1], bedding: row[2], straw: row[3], other: row[4], concept: row[5], total: row[9] ?? 0 })),
       daily: dailyRaw.filter(row => row[0]).map(row => ({ date: excelDate(row[0]), total: Number(row[1] || 0) }))
