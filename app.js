@@ -41,7 +41,7 @@ function render() {
   $('salesMonthDetail').textContent = `${sales.reduce((sum, row) => sum + Number(row.dozens || 0), 0)} docenas vendidas este mes`;
   $('expensesMonthValue').textContent = euro(expenseTotal);
   $('expensesMonthDetail').textContent = `${expenses.length} gastos registrados este mes`;
-  const eggRow = row => `<tr><td>${date(row.date)}</td><td>${row.weight} g</td><td><b>${esc(row.size)}</b></td></tr>`;
+  const eggRow = row => `<tr><td>${date(row.date)}</td><td>${row.weight} g</td><td><b>${esc(row.size)}</b></td><td><button class="small-button delete" data-delete-egg="${row.row}">Eliminar</button></td></tr>`;
   renderRows('recentEggs', data.eggs, eggRow, 'No hay huevos registrados.');
   renderRows('productionTable', data.eggs, eggRow, 'No hay huevos registrados.');
   renderRows('salesTable', data.sales, row => `<tr><td>${date(row.date)}</td><td>${esc(row.client)}</td><td>${esc(row.type)}</td><td>${row.dozens}</td><td>${euro(row.total)}</td><td><button class="small-button delete" data-delete-sale="${row.row}">Eliminar</button></td></tr>`, 'No hay ventas registradas.');
@@ -86,6 +86,7 @@ async function request(path, options) {
     if (path === '/api/data') return CloudExcel.load();
     const payload = JSON.parse(options.body);
     if (path === '/api/eggs') return CloudExcel.appendEggs(payload);
+    if (path === '/api/delete-egg') return CloudExcel.deleteEgg(payload.row);
     if (path === '/api/sale') return CloudExcel.appendSale(payload);
     if (path === '/api/expense') return CloudExcel.appendExpense(payload);
     if (path === '/api/delete-sale') return CloudExcel.deleteSale(payload.row);
@@ -128,6 +129,7 @@ $('calendarGrid').addEventListener('click', event => { const cell = event.target
 $('dayPanel').addEventListener('click', event => { if (event.target.id !== 'planSale') return; $('saleDate').value = selectedDate; switchView('sales'); });
 $('eggWeights').addEventListener('input', () => { const weights = weightsFromInput(); $('sizePreview').textContent = weights.length ? weights.map(weight => `${weight} g → ${classify(weight)}`).join(' · ') : 'Escribe los pesos para ver las tallas.'; });
 $('eggForm').addEventListener('submit', async event => { event.preventDefault(); const weights = weightsFromInput(); if (!weights.length) return toast('Introduce al menos un peso válido.', true); try { await request('/api/eggs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: $('eggDate').value, weights }) }); $('eggWeights').value = ''; $('sizePreview').textContent = 'Escribe los pesos para ver las tallas.'; toast(`${weights.length} huevo(s) guardado(s) en POSTA_DIÀRIA_MIDES.`); await load(); } catch (error) { toast(error.message, true); } });
+['recentEggs', 'productionTable'].forEach(id => $(id).addEventListener('click', async event => { const button = event.target.closest('[data-delete-egg]'); if (!button || !confirm('¿Eliminar este huevo del Excel?')) return; try { await request('/api/delete-egg', { method: 'POST', body: JSON.stringify({ row: Number(button.dataset.deleteEgg) }) }); toast('Huevo eliminado del Excel.'); await load(); } catch (error) { toast(error.message, true); } }));
 $('saleForm').addEventListener('submit', async event => { event.preventDefault(); try { await request('/api/sale', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: $('saleDate').value, client: $('saleClient').value.trim(), type: $('saleType').value.trim(), dozens: Number($('saleDozens').value) }) }); event.target.reset(); $('saleDate').value = today; toast('Venta guardada en VENTES.'); await load(); } catch (error) { toast(error.message, true); } });
 $('expenseForm').addEventListener('submit', async event => { event.preventDefault(); try { await request('/api/expense', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: $('expenseDate').value, feed: Number($('expenseFeed').value), bedding: Number($('expenseBedding').value), straw: Number($('expenseStraw').value), other: Number($('expenseOther').value), concept: $('expenseConcept').value.trim() }) }); event.target.reset(); $('expenseDate').value = today; ['expenseFeed', 'expenseBedding', 'expenseStraw', 'expenseOther'].forEach(id => $(id).value = 0); toast('Gasto guardado en DESPESES.'); await load(); } catch (error) { toast(error.message, true); } });
 $('salesTable').addEventListener('click', async event => { const button = event.target.closest('[data-delete-sale]'); if (!button || !confirm('¿Eliminar esta venta del Excel?')) return; try { await request('/api/delete-sale', { method: 'POST', body: JSON.stringify({ row: Number(button.dataset.deleteSale) }) }); toast('Venta eliminada del Excel.'); await load(); } catch (error) { toast(error.message, true); } });
