@@ -245,6 +245,15 @@ $('changePinBtn').addEventListener('click', async () => {
   setSyncStatus('synced');
   toast('PIN actualizado. Datos sincronizados.');
 });
+$('resetDataBtn').addEventListener('click', () => {
+  if (!confirm('Esto borrará TODOS los huevos, ventas y gastos (también en la nube, en todos tus dispositivos). ¿Seguro? Esta acción no se puede deshacer.')) return;
+  data = Store.empty();
+  Store.save(data);
+  if (Cloud.isReady()) Cloud.push(data);
+  selectedEggs.clear();
+  render();
+  toast('Todos los datos se han borrado.');
+});
 $('importFile').addEventListener('change', async event => {
   const file = event.target.files[0]; if (!file) return;
   try {
