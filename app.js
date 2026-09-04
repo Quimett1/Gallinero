@@ -6,12 +6,19 @@ let productionChart, sizeChart;
 let cloudConnected = false;
 let calendarMonth = new Date(`${today}T12:00:00`); calendarMonth.setDate(1);
 let selectedDate = today;
+let selectedMonth = today.slice(0, 7);
+let selectedEggs = new Set();
 let orders = JSON.parse(localStorage.getItem('gallines-orders-v1') || '[]');
 
 const euro = value => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(Number(value || 0));
 const date = value => value ? new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(new Date(`${value}T12:00:00`)) : '—';
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
 const sameMonth = value => value?.slice(0, 7) === today.slice(0, 7);
+const inSelectedMonth = value => value?.slice(0, 7) === selectedMonth;
+const monthLabel = month => {
+  const label = new Date(`${month}-01T12:00:00`).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+};
 const eggCountFor = dateKey => data.eggs.filter(row => row.date === dateKey).length || Number(data.daily.find(row => row.date === dateKey)?.total || 0);
 const saveOrders = () => localStorage.setItem('gallines-orders-v1', JSON.stringify(orders));
 
@@ -23,31 +30,46 @@ function classify(weight) { return weight < 53 ? 'S' : weight < 63 ? 'M' : weigh
 function weightsFromInput() {
   return $('eggWeights').value.split(/[\s,;]+/).filter(Boolean).map(Number).filter(value => Number.isFinite(value) && value > 0);
 }
+const eggRowSelectable = row => `<tr><td><input type="checkbox" class="egg-select" data-select-egg="${row.row}" ${selectedEggs.has(row.row) ? 'checked' : ''}></td><td>${date(row.date)}</td><td>${row.weight} g</td><td><b>${esc(row.size)}</b></td><td><button class="small-button delete" data-delete-egg="${row.row}">Eliminar</button></td></tr>`;
 function renderRows(id, rows, render, empty) {
   $(id).innerHTML = rows.slice().reverse().map(render).join('') || `<tr><td colspan="8">${empty}</td></tr>`;
 }
 function render() {
   const todayEggs = eggCountFor(today);
-  const sales = data.sales.filter(row => sameMonth(row.date));
-  const expenses = data.expenses.filter(row => sameMonth(row.date));
+  const sales = data.sales.filter(row => inSelectedMonth(row.date));
+  const expenses = data.expenses.filter(row => inSelectedMonth(row.date));
   const income = sales.reduce((sum, row) => sum + Number(row.total || 0), 0);
   const expenseTotal = expenses.reduce((sum, row) => sum + Number(row.total || 0), 0);
+  const label = monthLabel(selectedMonth);
+  const isCurrentMonth = selectedMonth === today.slice(0, 7);
+  ['dashMonthLabel', 'salesMonthLabel', 'expensesMonthLabel'].forEach(id => $(id).textContent = label);
   $('eggsToday').textContent = todayEggs;
   $('eggsTodayDetail').textContent = todayEggs ? `Registrados el ${date(today)}` : 'Todavía no hay registros';
   $('dozensMonth').textContent = sales.reduce((sum, row) => sum + Number(row.dozens || 0), 0);
+  $('dozensMonthLabel').textContent = isCurrentMonth ? 'Este mes' : label;
   $('incomeMonth').textContent = euro(income);
+  $('incomeMonthLabel').textContent = isCurrentMonth ? 'Este mes' : label;
   $('profitMonth').textContent = euro(income - expenseTotal);
+  $('profitMonthLabel').textContent = `Ingresos − gastos · ${label}`;
   $('salesMonthValue').textContent = euro(income);
-  $('salesMonthDetail').textContent = `${sales.reduce((sum, row) => sum + Number(row.dozens || 0), 0)} docenas vendidas este mes`;
+  $('salesMonthDetail').textContent = `${sales.reduce((sum, row) => sum + Number(row.dozens || 0), 0)} docenas vendidas en ${label.toLowerCase()}`;
   $('expensesMonthValue').textContent = euro(expenseTotal);
-  $('expensesMonthDetail').textContent = `${expenses.length} gastos registrados este mes`;
+  $('expensesMonthDetail').textContent = `${expenses.length} gastos registrados en ${label.toLowerCase()}`;
   const eggRow = row => `<tr><td>${date(row.date)}</td><td>${row.weight} g</td><td><b>${esc(row.size)}</b></td><td><button class="small-button delete" data-delete-egg="${row.row}">Eliminar</button></td></tr>`;
   renderRows('recentEggs', data.eggs, eggRow, 'No hay huevos registrados.');
-  renderRows('productionTable', data.eggs, eggRow, 'No hay huevos registrados.');
+  const eggRows = new Set(data.eggs.map(row => row.row));
+  selectedEggs.forEach(row => { if (!eggRows.has(row)) selectedEggs.delete(row); });
+  renderRows('productionTable', data.eggs, eggRowSelectable, 'No hay huevos registrados.');
+  updateEggSelectionUI();
   renderRows('salesTable', data.sales, row => `<tr><td>${date(row.date)}</td><td>${esc(row.client)}</td><td>${esc(row.type)}</td><td>${row.dozens}</td><td>${euro(row.total)}</td><td><button class="small-button delete" data-delete-sale="${row.row}">Eliminar</button></td></tr>`, 'No hay ventas registradas.');
   renderRows('expensesTable', data.expenses, row => `<tr><td>${date(row.date)}</td><td>${row.feed || 0}</td><td>${row.bedding || 0}</td><td>${row.straw || 0}</td><td>${euro(row.other)}</td><td>${esc(row.concept)}</td><td>${euro(row.total)}</td><td><button class="small-button delete" data-delete-expense="${row.row}">Eliminar</button></td></tr>`, 'No hay gastos registrados.');
   drawCharts();
   renderCalendar(); renderOrders();
+}
+function updateEggSelectionUI() {
+  $('eggSelectedCount').textContent = `${selectedEggs.size} seleccionados`;
+  $('deleteSelectedEggs').disabled = selectedEggs.size === 0;
+  $('selectAllEggs').checked = data.eggs.length > 0 && data.eggs.every(row => selectedEggs.has(row.row));
 }
 function renderCalendar() {
   const year = calendarMonth.getFullYear(); const month = calendarMonth.getMonth();
@@ -74,11 +96,13 @@ function renderOrders() {
 function drawCharts() {
   if (!window.Chart) return;
   const labels = []; const quantities = [];
-  const now = new Date(); const year = now.getFullYear(); const month = now.getMonth(); const totalDays = now.getDate();
+  const [selYear, selMonthNum] = selectedMonth.split('-').map(Number); const year = selYear; const month = selMonthNum - 1;
+  const isCurrentMonth = selectedMonth === today.slice(0, 7);
+  const totalDays = isCurrentMonth ? new Date().getDate() : new Date(year, month + 1, 0).getDate();
   for (let dayNumber = 1; dayNumber <= totalDays; dayNumber++) { const day = new Date(year, month, dayNumber, 12); const key = day.toISOString().slice(0, 10); labels.push(day.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })); quantities.push(eggCountFor(key)); }
   productionChart?.destroy(); sizeChart?.destroy();
   productionChart = new Chart($('productionChart'), { type: 'bar', data: { labels, datasets: [{ data: quantities, backgroundColor: '#2a8757', borderRadius: 5 }] }, options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#e8eee8' } }, x: { grid: { display: false } } } } });
-  const monthEggs = data.eggs.filter(row => sameMonth(row.date)); const sizes = ['S', 'M', 'L', 'XL'];
+  const monthEggs = data.eggs.filter(row => inSelectedMonth(row.date)); const sizes = ['S', 'M', 'L', 'XL'];
   sizeChart = new Chart($('sizeChart'), { type: 'doughnut', data: { labels: sizes, datasets: [{ data: sizes.map(size => monthEggs.filter(row => row.size === size).length), backgroundColor: ['#e7b04a', '#6ea778', '#3f8a6a', '#285744'], borderWidth: 0 }] }, options: { cutout: '64%', plugins: { legend: { position: 'bottom', labels: { boxWidth: 10 } } } } });
 }
 async function request(path, options) {
@@ -125,11 +149,40 @@ $('signIn').addEventListener('click', async () => {
 $('refresh').addEventListener('click', load);
 $('previousMonth').addEventListener('click', () => { calendarMonth.setMonth(calendarMonth.getMonth() - 1); renderCalendar(); });
 $('nextMonth').addEventListener('click', () => { calendarMonth.setMonth(calendarMonth.getMonth() + 1); renderCalendar(); });
+document.querySelectorAll('[data-month-nav]').forEach(button => button.addEventListener('click', () => {
+  const [year, month] = selectedMonth.split('-').map(Number);
+  const shifted = new Date(year, month - 1 + (button.dataset.monthNav === 'next' ? 1 : -1), 1);
+  selectedMonth = `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, '0')}`;
+  render();
+}));
+$('monthNavToday').addEventListener('click', () => { selectedMonth = today.slice(0, 7); render(); });
 $('calendarGrid').addEventListener('click', event => { const cell = event.target.closest('[data-date]'); if (!cell) return; selectedDate = cell.dataset.date; renderCalendar(); });
 $('dayPanel').addEventListener('click', event => { if (event.target.id !== 'planSale') return; $('saleDate').value = selectedDate; switchView('sales'); });
 $('eggWeights').addEventListener('input', () => { const weights = weightsFromInput(); $('sizePreview').textContent = weights.length ? weights.map(weight => `${weight} g → ${classify(weight)}`).join(' · ') : 'Escribe los pesos para ver las tallas.'; });
 $('eggForm').addEventListener('submit', async event => { event.preventDefault(); const weights = weightsFromInput(); if (!weights.length) return toast('Introduce al menos un peso válido.', true); try { await request('/api/eggs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: $('eggDate').value, weights }) }); $('eggWeights').value = ''; $('sizePreview').textContent = 'Escribe los pesos para ver las tallas.'; toast(`${weights.length} huevo(s) guardado(s) en POSTA_DIÀRIA_MIDES.`); await load(); } catch (error) { toast(error.message, true); } });
 ['recentEggs', 'productionTable'].forEach(id => $(id).addEventListener('click', async event => { const button = event.target.closest('[data-delete-egg]'); if (!button || !confirm('¿Eliminar este huevo del Excel?')) return; try { await request('/api/delete-egg', { method: 'POST', body: JSON.stringify({ row: Number(button.dataset.deleteEgg) }) }); toast('Huevo eliminado del Excel.'); await load(); } catch (error) { toast(error.message, true); } }));
+$('productionTable').addEventListener('change', event => {
+  const checkbox = event.target.closest('[data-select-egg]'); if (!checkbox) return;
+  const row = Number(checkbox.dataset.selectEgg);
+  if (checkbox.checked) selectedEggs.add(row); else selectedEggs.delete(row);
+  updateEggSelectionUI();
+});
+$('selectAllEggs').addEventListener('change', event => {
+  if (event.target.checked) data.eggs.forEach(row => selectedEggs.add(row.row)); else selectedEggs.clear();
+  renderRows('productionTable', data.eggs, eggRowSelectable, 'No hay huevos registrados.');
+  updateEggSelectionUI();
+});
+$('deleteSelectedEggs').addEventListener('click', async () => {
+  if (!selectedEggs.size) return;
+  if (!confirm(`¿Eliminar ${selectedEggs.size} huevo(s) seleccionado(s) del Excel?`)) return;
+  const rows = [...selectedEggs];
+  try {
+    for (const row of rows) await request('/api/delete-egg', { method: 'POST', body: JSON.stringify({ row }) });
+    toast(`${rows.length} huevo(s) eliminado(s) del Excel.`);
+    selectedEggs.clear();
+    await load();
+  } catch (error) { toast(error.message, true); }
+});
 $('saleForm').addEventListener('submit', async event => { event.preventDefault(); try { await request('/api/sale', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: $('saleDate').value, client: $('saleClient').value.trim(), type: $('saleType').value.trim(), dozens: Number($('saleDozens').value) }) }); event.target.reset(); $('saleDate').value = today; toast('Venta guardada en VENTES.'); await load(); } catch (error) { toast(error.message, true); } });
 $('expenseForm').addEventListener('submit', async event => { event.preventDefault(); try { await request('/api/expense', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: $('expenseDate').value, feed: Number($('expenseFeed').value), bedding: Number($('expenseBedding').value), straw: Number($('expenseStraw').value), other: Number($('expenseOther').value), concept: $('expenseConcept').value.trim() }) }); event.target.reset(); $('expenseDate').value = today; ['expenseFeed', 'expenseBedding', 'expenseStraw', 'expenseOther'].forEach(id => $(id).value = 0); toast('Gasto guardado en DESPESES.'); await load(); } catch (error) { toast(error.message, true); } });
 $('salesTable').addEventListener('click', async event => { const button = event.target.closest('[data-delete-sale]'); if (!button || !confirm('¿Eliminar esta venta del Excel?')) return; try { await request('/api/delete-sale', { method: 'POST', body: JSON.stringify({ row: Number(button.dataset.deleteSale) }) }); toast('Venta eliminada del Excel.'); await load(); } catch (error) { toast(error.message, true); } });
