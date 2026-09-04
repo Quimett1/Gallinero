@@ -32,6 +32,9 @@ function setSyncStatus(state) {
   node.className = `sync-status ${state}`;
   node.textContent = state === 'synced' ? 'Sincronizado en todos tus dispositivos' : state === 'offline' ? 'Guardado solo en este dispositivo' : 'Guardado en este dispositivo';
 }
+function updatePinUI() {
+  $('pinStatus').textContent = Cloud.hasPin() ? 'PIN configurado en este dispositivo.' : 'Sin PIN: tus datos solo se guardan en este dispositivo.';
+}
 
 function toast(message, error = false) {
   const node = $('toast'); node.textContent = message; node.className = `${error ? 'error ' : ''}show`;
@@ -224,6 +227,21 @@ $('exportBtn').addEventListener('click', () => {
   try { ExcelIO.exportFile(data, `GALLINES_backup_${today}.xlsx`); toast('Copia de seguridad descargada.'); }
   catch (error) { toast(error.message, true); }
 });
+$('changePinBtn').addEventListener('click', async () => {
+  let pin = '';
+  try { pin = (prompt('Introduce el PIN que quieres usar (mín. 4 caracteres). Debe coincidir en todos los dispositivos que quieras sincronizar juntos:') || '').trim(); }
+  catch { return toast('No se pudo abrir el cuadro de PIN.', true); }
+  if (pin.length < 4) return toast('El PIN debe tener al menos 4 caracteres.', true);
+  toast('Conectando…');
+  const connected = await Cloud.setPin(pin);
+  updatePinUI();
+  if (!connected) { setSyncStatus('offline'); return toast('No se pudo conectar con ese PIN.', true); }
+  const remote = await Cloud.pull();
+  data = { eggs: remote?.eggs || [], sales: remote?.sales || [], expenses: remote?.expenses || [], daily: remote?.daily || [] };
+  Store.save(data); selectedEggs.clear(); render();
+  setSyncStatus('synced');
+  toast('PIN actualizado. Datos sincronizados.');
+});
 $('importFile').addEventListener('change', async event => {
   const file = event.target.files[0]; if (!file) return;
   try {
@@ -237,7 +255,16 @@ $('importFile').addEventListener('change', async event => {
 });
 render();
 (async () => {
-  const connected = await Cloud.init();
+  let connected = false;
+  try {
+    if (!Cloud.hasPin()) {
+      const pin = (prompt('Crea un PIN para proteger y sincronizar tus datos en la nube (mín. 4 caracteres). Usa el mismo PIN en todos tus dispositivos para verlos sincronizados; solo quien conozca este PIN podrá acceder a ellos.') || '').trim();
+      connected = pin.length >= 4 ? await Cloud.setPin(pin) : false;
+    } else {
+      connected = await Cloud.init();
+    }
+  } catch { connected = false; }
+  updatePinUI();
   if (!connected) { setSyncStatus('offline'); return; }
   const remote = await Cloud.pull();
   if (remote && (remote.eggs?.length || remote.sales?.length || remote.expenses?.length)) {
