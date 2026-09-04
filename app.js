@@ -168,7 +168,7 @@ $('saleForm').addEventListener('submit', event => {
 });
 $('expenseForm').addEventListener('submit', event => {
   event.preventDefault();
-  const payload = { date: $('expenseDate').value, feed: Number($('expenseFeed').value), bedding: Number($('expenseBedding').value), straw: Number($('expenseStraw').value), other: Number($('expenseOther').value), concept: $('expenseConcept').value.trim() };
+  const payload = { date: $('expenseDate').value, feed: Number($('expenseFeed').value), bedding: Number($('expenseBedding').value), straw: Number($('expenseStraw').value), other: Number($('expenseOther').value), concept: $('expenseConcept').value.trim(), feedPrice: Number($('expenseFeedPrice').value) || 0, beddingPrice: Number($('expenseBeddingPrice').value) || 0, strawPrice: Number($('expenseStrawPrice').value) || 0 };
   data.expenses.push({ id: newId(), ...payload, total: expenseTotal(payload) });
   persist(); event.target.reset(); $('expenseDate').value = today; ['expenseFeed', 'expenseBedding', 'expenseStraw', 'expenseOther'].forEach(id => $(id).value = 0);
   toast('Gasto guardado.'); render();
@@ -208,6 +208,9 @@ $('expensePhoto').addEventListener('change', async event => {
     $('expenseBedding').value = result.bedding || 0;
     $('expenseStraw').value = result.straw || 0;
     $('expenseOther').value = result.other || 0;
+    if (result.feedPrice) $('expenseFeedPrice').value = result.feedPrice;
+    if (result.beddingPrice) $('expenseBeddingPrice').value = result.beddingPrice;
+    if (result.strawPrice) $('expenseStrawPrice').value = result.strawPrice;
     if (result.concept) $('expenseConcept').value = result.concept;
     toast('Ticket leído. Revisa los datos y guarda el gasto.');
   } catch (error) { toast(error.message, true); }

@@ -63,6 +63,9 @@ const ExcelIO = (() => {
     const otherCol = findColumn(headers, 'ALTRES', 'OTROS');
     const conceptCol = findColumn(headers, 'CONCEPTE', 'CONCEPTO');
     const totalCol = findColumn(headers, 'TOTAL');
+    const feedPriceCol = findColumn(headers, 'PREU PINSO', 'PRECIO PIENSO');
+    const beddingPriceCol = findColumn(headers, 'PREU BIRUTA', 'PRECIO BIRUTA');
+    const strawPriceCol = findColumn(headers, 'PREU PALLA', 'PRECIO PAJA');
     const hasHeaders = dateCol >= 0;
     return rows.slice(1).map(row => {
       const date = excelDate(hasHeaders ? row[dateCol] : row[0]);
@@ -73,8 +76,11 @@ const ExcelIO = (() => {
       const other = Number((hasHeaders && otherCol >= 0 ? row[otherCol] : row[4]) || 0);
       const concept = (hasHeaders && conceptCol >= 0 ? row[conceptCol] : row[5]) || '';
       if (!feed && !bedding && !straw && !other) return null;
-      const total = Number((hasHeaders && totalCol >= 0 ? row[totalCol] : row[9]) || 0) || expenseTotal({ feed, bedding, straw, other });
-      return { id: newId(), date, feed, bedding, straw, other, concept, total };
+      const feedPrice = feedPriceCol >= 0 ? Number(row[feedPriceCol]) || undefined : undefined;
+      const beddingPrice = beddingPriceCol >= 0 ? Number(row[beddingPriceCol]) || undefined : undefined;
+      const strawPrice = strawPriceCol >= 0 ? Number(row[strawPriceCol]) || undefined : undefined;
+      const total = Number((hasHeaders && totalCol >= 0 ? row[totalCol] : row[9]) || 0) || expenseTotal({ feed, bedding, straw, other, feedPrice, beddingPrice, strawPrice });
+      return { id: newId(), date, feed, bedding, straw, other, concept, feedPrice, beddingPrice, strawPrice, total };
     }).filter(Boolean);
   }
   function parseDaily(rows) {
@@ -125,8 +131,8 @@ const ExcelIO = (() => {
       ...sorted(data.sales).map(row => [row.date, row.client, row.type, row.dozens, row.price, row.total])
     ]), 'VENTES');
     XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([
-      ['DATA', 'PINSO', 'BIRUTA', 'PALLA', 'ALTRES', 'CONCEPTE', 'TOTAL'],
-      ...sorted(data.expenses).map(row => [row.date, row.feed, row.bedding, row.straw, row.other, row.concept, row.total])
+      ['DATA', 'PINSO', 'PREU PINSO', 'BIRUTA', 'PREU BIRUTA', 'PALLA', 'PREU PALLA', 'ALTRES', 'CONCEPTE', 'TOTAL'],
+      ...sorted(data.expenses).map(row => [row.date, row.feed, row.feedPrice ?? '', row.bedding, row.beddingPrice ?? '', row.straw, row.strawPrice ?? '', row.other, row.concept, row.total])
     ]), 'DESPESES');
     if (data.daily.length) XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([
       ['DATA', 'TOTAL'],

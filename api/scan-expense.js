@@ -9,12 +9,15 @@ module.exports = async (req, res) => {
   const prompt = `Eres un asistente que lee tickets o facturas de compras para un gallinero doméstico.
 Analiza la imagen del ticket y extrae estos datos:
 - feed: sacos de pienso comprados (número entero, 0 si no aparece)
+- feedPrice: precio en euros de UN saco de pienso (el importe de esa línea dividido entre las unidades). 0 si no hay pienso en el ticket.
 - bedding: sacas de biruta compradas (número entero, 0 si no aparece)
+- beddingPrice: precio en euros de UNA saca de biruta. 0 si no hay biruta en el ticket.
 - straw: balas de paja compradas (número entero, 0 si no aparece)
+- strawPrice: precio en euros de UNA bala de paja. 0 si no hay paja en el ticket.
 - other: importe en euros de cualquier otro gasto del ticket no cubierto por lo anterior (número decimal, 0 si no aplica)
 - concept: descripción breve del gasto (texto corto, ej. "Pienso y biruta Agroveterinaria")
 - date: fecha del ticket en formato YYYY-MM-DD si es visible, si no una cadena vacía
-Responde únicamente con el JSON, sin explicaciones.`;
+Los precios por unidad deben calcularse dividiendo el importe total de cada línea entre la cantidad comprada. Responde únicamente con el JSON, sin explicaciones.`;
 
   try {
     const response = await fetch(
@@ -30,13 +33,16 @@ Responde únicamente con el JSON, sin explicaciones.`;
               type: 'OBJECT',
               properties: {
                 feed: { type: 'NUMBER' },
+                feedPrice: { type: 'NUMBER' },
                 bedding: { type: 'NUMBER' },
+                beddingPrice: { type: 'NUMBER' },
                 straw: { type: 'NUMBER' },
+                strawPrice: { type: 'NUMBER' },
                 other: { type: 'NUMBER' },
                 concept: { type: 'STRING' },
                 date: { type: 'STRING' }
               },
-              required: ['feed', 'bedding', 'straw', 'other', 'concept', 'date']
+              required: ['feed', 'feedPrice', 'bedding', 'beddingPrice', 'straw', 'strawPrice', 'other', 'concept', 'date']
             }
           }
         })
