@@ -76,9 +76,9 @@ const ExcelIO = (() => {
       const other = Number((hasHeaders && otherCol >= 0 ? row[otherCol] : row[4]) || 0);
       const concept = (hasHeaders && conceptCol >= 0 ? row[conceptCol] : row[5]) || '';
       if (!feed && !bedding && !straw && !other) return null;
-      const feedPrice = feedPriceCol >= 0 ? Number(row[feedPriceCol]) || undefined : undefined;
-      const beddingPrice = beddingPriceCol >= 0 ? Number(row[beddingPriceCol]) || undefined : undefined;
-      const strawPrice = strawPriceCol >= 0 ? Number(row[strawPriceCol]) || undefined : undefined;
+      const feedPrice = (feedPriceCol >= 0 && Number(row[feedPriceCol])) || DEFAULT_PRICES.feedPrice;
+      const beddingPrice = (beddingPriceCol >= 0 && Number(row[beddingPriceCol])) || DEFAULT_PRICES.beddingPrice;
+      const strawPrice = (strawPriceCol >= 0 && Number(row[strawPriceCol])) || DEFAULT_PRICES.strawPrice;
       const total = Number((hasHeaders && totalCol >= 0 ? row[totalCol] : row[9]) || 0) || expenseTotal({ feed, bedding, straw, other, feedPrice, beddingPrice, strawPrice });
       return { id: newId(), date, feed, bedding, straw, other, concept, feedPrice, beddingPrice, strawPrice, total };
     }).filter(Boolean);
